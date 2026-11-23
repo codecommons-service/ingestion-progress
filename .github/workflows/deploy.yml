@@ -1,0 +1,42 @@
+# Template for the reports repo (copy pages/ to its root; see pages/README.md).
+#
+# Deploys the static live-progress page. Triggers ONLY when the page changes
+# (or manually) -- never on pushes to the `data` branch, which carry the
+# live stats.json and happen after every pipeline batch. That separation is
+# what keeps the number of Pages builds low.
+name: Deploy live progress page
+
+on:
+  push:
+    branches: [main]
+    paths: [index.html, .github/workflows/deploy.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Point the page at this repo's data branch
+        run: |
+          mkdir site
+          sed "s|__DATA_URL__|https://raw.githubusercontent.com/${{ github.repository }}/data/stats.json|" \
+            index.html > site/index.html
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deployment
+        uses: actions/deploy-pages@v4
