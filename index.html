@@ -17,7 +17,7 @@
 <div id="origins"></div>
 <div id="disk"></div>
 <script>
-//s __DATA_URL__ is substituted by the deploy workflow with
+// __DATA_URL__ is substituted by the deploy workflow with
 // https://raw.githubusercontent.com/<owner>/<repo>/<data branch>/stats.json
 // (override with ?src=<url> for local testing).
 const DATA_URL = new URLSearchParams(location.search).get("src") || "__DATA_URL__";
@@ -39,12 +39,18 @@ function humanBytes(n) {
   return n.toFixed(1) + " PB";
 }
 
+// The JSON comes from a branch a token can write to and is treated as
+// untrusted: only plot numbers and plain strings, never anything that could
+// be markup.
+const num = v => (Number.isFinite(Number(v)) ? Number(v) : 0);
+
 function render(data) {
-  const rows = data.rows;
-  const x = rows.map(r => r.timestamp);
+  const rows = (Array.isArray(data.rows) ? data.rows : []).slice(0, 100000);
+  const x = rows.map(r => String(r.timestamp));
   const traces = SERIES.map(([key, name]) => ({
-    x, y: rows.map(r => r[key]), name, mode: "lines+markers", type: "scatter",
+    x, y: rows.map(r => num(r[key])), name, mode: "lines+markers", type: "scatter",
   }));
+  data.total_origins = num(data.total_origins);
   const shapes = [], annotations = [];
   if (data.total_origins) {
     shapes.push({ type: "line", xref: "paper", x0: 0, x1: 1,
@@ -59,7 +65,7 @@ function render(data) {
     shapes, annotations, legend: { orientation: "h", y: 1.15 },
   });
 
-  const bytes = rows.map(r => r.cumulative_bytes);
+  const bytes = rows.map(r => num(r.cumulative_bytes));
   Plotly.react("disk", [{
     x, y: bytes, name: "ORC/Parquet bytes written", mode: "lines+markers", type: "scatter",
     text: bytes.map(humanBytes), hovertemplate: "%{x}<br>%{text}<extra></extra>",
@@ -76,7 +82,7 @@ async function refresh() {
     const data = await resp.json();
     render(data);
     status.className = "";
-    status.textContent = "Data generated " + data.generated_at +
+    status.textContent = "Data generated " + String(data.generated_at) +
       " · page refreshed " + new Date().toLocaleTimeString();
   } catch (err) {
     status.className = "error";
